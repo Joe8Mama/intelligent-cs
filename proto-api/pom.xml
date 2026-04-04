@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ====================================================================
+         proto-api 模块
+         职责：集中存放所有 .proto 文件，编译生成 Java 类并打成 jar，
+               供 llm-service / dispatcher-service 等业务模块直接依赖。
+         打包类型：jar（不是 Spring Boot 可运行包）
+         ==================================================================== -->
+
+    <parent>
+        <groupId>com.ics</groupId>
+        <artifactId>intelligent-cs</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>proto-api</artifactId>
+    <name>proto-api</name>
+    <description>gRPC Proto 定义模块 - 编译所有 .proto 为 Java 代码并打包为 jar</description>
+
+    <!-- 注意：此模块不需要 Spring Boot 打包插件，普通 jar 即可 -->
+
+    <dependencies>
+        <!-- Protobuf 运行时 -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java-util</artifactId>
+        </dependency>
+
+        <!-- gRPC 运行时（生成的 Stub 类需要） -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+        </dependency>
+
+        <!-- gRPC 生成代码中的 @Generated 注解需要 -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- os-maven-plugin 必须在 extensions 中声明才能生成 ${os.detected.classifier} -->
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.7.1</version>
+            </extension>
+        </extensions>
+
+        <plugins>
+            <!-- protobuf 编译插件：将 src/main/proto 下的 .proto 编译为 Java 源码 -->
+            <plugin>
+                <groupId>org.xolstice.maven.plugins</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <!-- version 和基础 configuration 继承自父 POM pluginManagement -->
+                <configuration>
+                    <!--
+                        proto 文件目录：使用本模块自己的 src/main/proto
+                        所有 .proto 文件从原来的 intelligent-cs/proto/ 复制到这里
+                    -->
+                    <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
+                </configuration>
+            </plugin>
+
+            <!-- build-helper-maven-plugin: 将 protobuf 生成的源码目录标记为源码根目录 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>add-protobuf-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/protobuf/java</source>
+                                <source>${project.build.directory}/generated-sources/protobuf/grpc-java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

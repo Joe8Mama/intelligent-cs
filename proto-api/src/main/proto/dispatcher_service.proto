@@ -1,0 +1,122 @@
+// ============================================================================
+// 调度服务层 - gRPC 接口定义
+// 职责: 接收事件、协调大小模型协同、管理异步任务生命周期
+// ============================================================================
+syntax = "proto3";
+
+package com.ics.dispatcher.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.ics.dispatcher.grpc.proto";
+option java_outer_classname = "DispatcherServiceProto";
+
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// 调度服务 - 事件驱动的核心调度接口
+// ============================================================================
+service DispatcherService {
+    // ① 接收「意图识别失败」事件（由小模型服务层调用）
+    // 触发后: 异步调用大模型语料生成 + 大模型直接回答
+    rpc OnIntentFailed(IntentFailedEvent) returns (EventResponse);
+
+    // ② 接收「用户反馈不佳」事件（由前端/网关层调用）
+    // 触发后: 异步调用大模型语料生成
+    rpc OnUserFeedback(UserFeedbackEvent) returns (EventResponse);
+
+    // ③ 接收「语料入库完成」通知（由大模型语料生成模块回调）
+    // 触发后: 异步调用小模型训练模块
+    rpc OnCorpusReady(CorpusReadyNotification) returns (EventResponse);
+
+    // ④ 查询任务状态（供管理后台或其他模块查询）
+    rpc QueryTaskStatus(TaskStatusRequest) returns (TaskStatusResponse);
+}
+
+// ============================================================================
+// 消息定义 - 事件类型
+// ============================================================================
+
+// 意图识别失败事件
+message IntentFailedEvent {
+    string event_id = 1;                  // 事件唯一标识（幂等键）
+    string session_id = 2;               // 会话ID
+    string user_id = 3;                  // 用户ID
+    string user_input = 4;              // 用户原始输入
+    repeated DialogMessage dialog_history = 5;  // 对话历史
+    string small_model_response = 6;     // 小模型的（错误）响应
+    float intent_confidence = 7;         // 意图识别置信度
+    google.protobuf.Timestamp event_time = 8;   // 事件发生时间
+}
+
+// 用户反馈不佳事件
+message UserFeedbackEvent {
+    string event_id = 1;                 // 事件唯一标识（幂等键）
+    string session_id = 2;              // 会话ID
+    string user_id = 3;                 // 用户ID
+    string feedback_content = 4;        // 反馈内容
+    int32 rating = 5;                   // 评分 (1-5, 1最差)
+    repeated DialogMessage dialog_history = 6;  // 对话历史
+    google.protobuf.Timestamp event_time = 7;   // 事件发生时间
+}
+
+// 语料入库完成通知
+message CorpusReadyNotification {
+    string task_id = 1;                  // 语料生成任务ID
+    string session_id = 2;              // 原始会话ID
+
+    // 文件路径传递 (OSS 存储)
+    string file_path = 3;               // OSS 中的 Key (如 corpus/raw/batch_xxx.jsonl)
+    string file_md5 = 4;                // 文件 MD5 校验和
+    int32 row_count = 5;                // 语料行数
+
+    bool success = 6;                   // 是否成功
+    string message = 7;                 // 描述信息
+    google.protobuf.Timestamp complete_time = 8; // 完成时间
+}
+
+// 对话消息（调度层视角）
+message DialogMessage {
+    string role = 1;        // "user" / "assistant" / "system"
+    string content = 2;     // 消息内容
+    int64 timestamp = 3;    // 时间戳(毫秒)
+}
+
+// 事件响应（通用）
+message EventResponse {
+    string event_id = 1;     // 事件唯一标识
+    int32 code = 2;          // 状态码: 0=已接收, 1=重复事件(幂等), 2=参数错误, 99=系统异常
+    string message = 3;      // 描述
+    string task_id = 4;      // 分配的任务ID（用于后续追踪）
+}
+
+// ============================================================================
+// 消息定义 - 任务查询
+// ============================================================================
+
+// 任务状态查询请求
+message TaskStatusRequest {
+    string task_id = 1;      // 任务ID
+}
+
+// 任务状态查询响应
+message TaskStatusResponse {
+    string task_id = 1;
+    TaskStatus status = 2;
+    string session_id = 3;
+    string trigger_type = 4;
+    string message = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Timestamp updated_at = 7;
+    int32 retry_count = 8;
+}
+
+// 任务状态枚举
+enum TaskStatus {
+    TASK_STATUS_UNKNOWN = 0;
+    TASK_PENDING = 1;              // 待处理
+    TASK_CORPUS_GENERATING = 2;    // 语料生成中
+    TASK_CORPUS_STORED = 3;        // 语料已入库
+    TASK_TRAINING = 4;             // 小模型训练中
+    TASK_COMPLETED = 5;            // 全流程完成
+    TASK_FAILED = 6;               // 失败
+}
