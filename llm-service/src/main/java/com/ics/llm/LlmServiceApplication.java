@@ -4,6 +4,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 大模型服务层启动类
@@ -14,7 +15,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * 3. 语料生成模块 - 基于对话数据+RAG生成高质量问答语料
  */
 @SpringBootApplication
-@EnableAsync  // 启用异步支持，语料生成为异步操作
+@EnableAsync
+@EnableScheduling
 @MapperScan("com.ics.llm.repository.mapper")
 public class LlmServiceApplication {
 

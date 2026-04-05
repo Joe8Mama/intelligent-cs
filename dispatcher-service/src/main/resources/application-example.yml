@@ -1,0 +1,97 @@
+# ============================================================================
+# 调度服务层配置（示例模板，复制为 application.yml 后填入实际值）
+# ============================================================================
+
+server:
+  port: 8088    # HTTP 端口
+
+spring:
+  application:
+    name: dispatcher-service
+
+  # MySQL 数据源
+  datasource:
+    url: jdbc:mysql://localhost:3306/intelligent_cs?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: <your-username>
+    password: <your-password>
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  # Redis 配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 1    # 使用不同的 db，与大模型服务隔离
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 3000ms
+
+# gRPC 服务端配置
+grpc:
+  server:
+    port: 50052              # 调度服务 gRPC 端口
+    enable-keep-alive: true
+    keep-alive-time: 30s
+    keep-alive-timeout: 10s
+
+  # gRPC 客户端配置
+  client:
+    # 大模型服务（语料生成）
+    llm-service:
+      address: static://localhost:50051
+      negotiation-type: plaintext
+      enable-keep-alive: true
+      keep-alive-time: 30s
+      keep-alive-timeout: 10s
+
+    # 小模型服务（训练触发）
+    small-model-service:
+      address: static://localhost:50053
+      negotiation-type: plaintext
+      enable-keep-alive: true
+      keep-alive-time: 30s
+      keep-alive-timeout: 10s
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+# ============================================================================
+# 调度配置
+# ============================================================================
+dispatch:
+  # 重试配置
+  retry:
+    max-retries: 1               # 最大重试次数
+    initial-delay-seconds: 2     # 首次重试延迟（秒）
+    backoff-multiplier: 2        # 退避乘数
+    max-delay-seconds: 300       # 最大重试延迟（秒）
+  # 定时任务配置
+  scheduler:
+    retry-cron: "0 */1 * * * ?"         # 每1分钟执行一次重试检查
+    timeout-check-cron: "0 */5 * * * ?" # 每5分钟检查超时任务
+
+# 日志配置
+logging:
+  level:
+    com.ics.dispatcher: DEBUG
+    io.grpc: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"

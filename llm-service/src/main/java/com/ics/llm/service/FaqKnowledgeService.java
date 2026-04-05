@@ -42,13 +42,13 @@ public class FaqKnowledgeService {
     private final EmbeddingService embeddingService;
     private final VectorStoreService vectorStoreService;
 
-    @Value("${faq.search.max-results:5}")
+    @Value("${faq.search.max-results}")
     private int maxResults;
 
-    @Value("${faq.search.min-score:0.3}")
+    @Value("${faq.search.min-score}")
     private double minScore;
 
-    @Value("${faq.search.vector-enabled:true}")
+    @Value("${faq.search.vector-enabled}")
     private boolean vectorEnabled;
 
     /** Redis 缓存键前缀 */
@@ -208,12 +208,13 @@ public class FaqKnowledgeService {
     }
 
     /**
-     * 同步单条 FAQ 到向量库 (供 Admin Controller 或数据导入时调用)
-     * 拼接 Question + Answer 作为索引文本，提高语义命中率
+     * 同步单条 FAQ 到向量库
+     * 拼接 Question + Answer 作为索引文本，成功后标记 vectorSynced=1
      *
      * @param faq FAQ 实体
+     * @return true 同步成功
      */
-    public void syncFaqToVector(FaqKnowledge faq) {
+    public boolean syncFaqToVector(FaqKnowledge faq) {
         try {
             String textToEmbed = faq.getQuestion() + " " + faq.getAnswer();
             List<Float> vector = embeddingService.embedText(textToEmbed);
@@ -223,10 +224,33 @@ public class FaqKnowledgeService {
                     vector,
                     Map.of("category", faq.getCategory() != null ? faq.getCategory() : "")
             );
+
+            // 同步成功后更新标记
+            FaqKnowledge update = new FaqKnowledge();
+            update.setId(faq.getId());
+            update.setVectorSynced(1);
+            faqKnowledgeMapper.updateById(update);
+
             log.debug("[RAG同步] FAQ 同步成功, id={}", faq.getId());
+            return true;
         } catch (Exception e) {
             log.error("[RAG同步] FAQ 向量同步失败, id={}", faq.getId(), e);
+            return false;
         }
+    }
+
+    /**
+     * 查询所有启用但未同步到向量库的 FAQ
+     *
+     * @return 未同步的 FAQ 列表
+     */
+    public List<FaqKnowledge> listUnsyncedFaqs() {
+        return faqKnowledgeMapper.selectList(
+                new LambdaQueryWrapper<FaqKnowledge>()
+                        .eq(FaqKnowledge::getStatus, 1)
+                        .and(w -> w.isNull(FaqKnowledge::getVectorSynced)
+                                .or().eq(FaqKnowledge::getVectorSynced, 0))
+        );
     }
 
     /**
@@ -248,8 +272,9 @@ public class FaqKnowledgeService {
         int success = 0;
         for (FaqKnowledge faq : allFaqs) {
             try {
-                syncFaqToVector(faq);
-                success++;
+                if (syncFaqToVector(faq)) {
+                    success++;
+                }
             } catch (Exception e) {
                 log.error("[RAG同步] FAQ id={} 同步失败: {}", faq.getId(), e.getMessage());
             }

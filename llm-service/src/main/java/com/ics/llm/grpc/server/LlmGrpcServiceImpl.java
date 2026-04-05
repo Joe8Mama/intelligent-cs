@@ -36,6 +36,7 @@ public class LlmGrpcServiceImpl extends LlmServiceGrpc.LlmServiceImplBase {
 
     private final LlmApiService llmApiService;
     private final FaqKnowledgeService faqKnowledgeService;
+    private final PromptTemplates promptTemplates;
 
     /**
      * 单轮对话 RPC 实现
@@ -131,7 +132,7 @@ public class LlmGrpcServiceImpl extends LlmServiceGrpc.LlmServiceImplBase {
             try {
                 String userMessage = extractLastUserMessage(chatRequest.getMessagesList());
                 String answer = llmApiService.chatSimple(
-                        PromptTemplates.DIRECT_ANSWER_SYSTEM_PROMPT, userMessage);
+                        promptTemplates.getDirectAnswerSystemPrompt(), userMessage);
 
                 responses.add(ChatResponse.newBuilder()
                         .setRequestId(chatRequest.getRequestId())
@@ -173,7 +174,7 @@ public class LlmGrpcServiceImpl extends LlmServiceGrpc.LlmServiceImplBase {
         try {
             String userMessage = extractLastUserMessage(request.getMessagesList());
             String fullAnswer = llmApiService.chatSimple(
-                    PromptTemplates.DIRECT_ANSWER_SYSTEM_PROMPT, userMessage);
+                    promptTemplates.getDirectAnswerSystemPrompt(), userMessage);
 
             // 模拟流式输出：按标点符号分段发送
             String[] segments = fullAnswer.split("(?<=[。！？.!?])");
@@ -225,7 +226,7 @@ public class LlmGrpcServiceImpl extends LlmServiceGrpc.LlmServiceImplBase {
 
         // 1. 构建包含 RAG 上下文的 system prompt
         String systemPrompt = config.getSystemPrompt().isEmpty()
-                ? PromptTemplates.DIRECT_ANSWER_SYSTEM_PROMPT
+                ? promptTemplates.getDirectAnswerSystemPrompt()
                 : config.getSystemPrompt();
 
         if (!ragResults.isEmpty()) {

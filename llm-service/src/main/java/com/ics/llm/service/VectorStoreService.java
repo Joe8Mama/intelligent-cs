@@ -31,16 +31,16 @@ public class VectorStoreService {
     private QdrantClient client;
     private volatile boolean initialized = false;
 
-    @Value("${qdrant.host:localhost}")
+    @Value("${qdrant.host}")
     private String host;
 
-    @Value("${qdrant.port:6334}")
+    @Value("${qdrant.port}")
     private int port;
 
-    @Value("${qdrant.collection-name:faq_knowledge_vectors}")
+    @Value("${qdrant.collection-name}")
     private String collectionName;
 
-    @Value("${embedding.dimensions:1024}")
+    @Value("${embedding.dimensions}")
     private int vectorDimension;
 
     @PostConstruct

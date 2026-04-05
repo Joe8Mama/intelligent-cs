@@ -1,4 +1,4 @@
-package com.ics.llm.service;
+package com.ics.llm.infra;
 
 import com.ics.llm.grpc.client.DispatcherGrpcClient;
 import lombok.RequiredArgsConstructor;

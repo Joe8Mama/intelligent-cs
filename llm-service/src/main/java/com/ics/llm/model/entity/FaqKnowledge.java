@@ -34,6 +34,9 @@ public class FaqKnowledge {
     /** 优先级 */
     private Integer priority;
 
+    /** 向量同步状态: 0=未同步, 1=已同步 */
+    private Integer vectorSynced;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

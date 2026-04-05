@@ -8,10 +8,10 @@ import java.time.LocalDateTime;
 /**
  * 调度任务实体
  * 对应数据库表: dispatch_task
- *
  * 记录每个调度任务的完整生命周期:
  * PENDING → CORPUS_GENERATING → CORPUS_STORED → TRAINING → COMPLETED
  *                                                        → FAILED
+ * 状态由 TaskStatus 枚举管理，数据库存储枚举的 code 字符串
  */
 @Data
 @TableName("dispatch_task")
@@ -35,7 +35,7 @@ public class DispatchTask {
     /** 触发类型: INTENT_FAILED / USER_FEEDBACK */
     private String triggerType;
 
-    /** 任务状态 */
+    /** 任务状态（存储 TaskStatus 枚举的 code） */
     private String status;
 
     /** 对话上下文（JSON） */
@@ -44,7 +44,7 @@ public class DispatchTask {
     /** 生成语料条数 */
     private Integer corpusCount;
 
-    /** 语料 OSS 文件路径 (如 corpus/raw/batch_xxx.jsonl) */
+    /** 语料 OSS 文件路径 */
     private String corpusFilePath;
 
     /** 关联训练任务ID */
@@ -71,11 +71,11 @@ public class DispatchTask {
     /** 完成时间 */
     private LocalDateTime completedAt;
 
-    // ===== 任务状态常量 =====
-    public static final String STATUS_PENDING = "PENDING";
-    public static final String STATUS_CORPUS_GENERATING = "CORPUS_GENERATING";
-    public static final String STATUS_CORPUS_STORED = "CORPUS_STORED";
-    public static final String STATUS_TRAINING = "TRAINING";
-    public static final String STATUS_COMPLETED = "COMPLETED";
-    public static final String STATUS_FAILED = "FAILED";
+    // ===== 状态常量（向后兼容，新代码建议直接使用 TaskStatus 枚举） =====
+    public static final String STATUS_PENDING = TaskStatus.PENDING.getCode();
+    public static final String STATUS_CORPUS_GENERATING = TaskStatus.CORPUS_GENERATING.getCode();
+    public static final String STATUS_CORPUS_STORED = TaskStatus.CORPUS_STORED.getCode();
+    public static final String STATUS_TRAINING = TaskStatus.TRAINING.getCode();
+    public static final String STATUS_COMPLETED = TaskStatus.COMPLETED.getCode();
+    public static final String STATUS_FAILED = TaskStatus.FAILED.getCode();
 }

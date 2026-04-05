@@ -2,6 +2,8 @@ package com.ics.llm.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ics.llm.infra.DispatcherNotifyService;
+import com.ics.llm.infra.OssService;
 import com.ics.llm.model.dto.CorpusItem;
 import com.ics.llm.model.dto.FaqSearchResult;
 import com.ics.llm.model.entity.SmallModelCorpus;
@@ -51,14 +53,15 @@ public class CorpusGenerationService {
     private final OssService ossService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final PromptTemplates promptTemplates;
 
-    @Value("${corpus.generation.default-count:5}")
+    @Value("${corpus.generation.default-count}")
     private int defaultCorpusCount;
 
-    @Value("${corpus.generation.max-count:20}")
+    @Value("${corpus.generation.max-count}")
     private int maxCorpusCount;
 
-    @Value("${corpus.generation.min-confidence:0.6}")
+    @Value("${corpus.generation.min-confidence}")
     private double minConfidence;
 
     /** 幂等性检查 Redis Key 前缀 */
@@ -111,11 +114,11 @@ public class CorpusGenerationService {
             log.info("[语料生成] RAG检索完成, taskId={}, 匹配FAQ数={}", taskId, ragResults.size());
 
             // ===== 第4步: 构建 Prompt 并调用 LLM 生成语料 =====
-            String userPrompt = PromptTemplates.buildCorpusGenerationPrompt(
+            String userPrompt = promptTemplates.buildCorpusGenerationPrompt(
                     dialogContext, ragResults, actualCount);
 
             String llmOutput = llmApiService.chatSimple(
-                    PromptTemplates.CORPUS_GENERATION_SYSTEM_PROMPT,
+                    promptTemplates.getCorpusGenerationSystemPrompt(),
                     userPrompt);
 
             log.info("[语料生成] LLM生成完成, taskId={}, 输出长度={}", taskId, llmOutput.length());

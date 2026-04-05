@@ -1,4 +1,4 @@
-package com.ics.llm.service;
+package com.ics.llm.infra;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
@@ -20,19 +20,19 @@ import java.io.ByteArrayInputStream;
 @Service
 public class OssService {
 
-    @Value("${aliyun.oss.endpoint:}")
+    @Value("${aliyun.oss.endpoint}")
     private String endpoint;
 
-    @Value("${aliyun.oss.access-key-id:}")
+    @Value("${aliyun.oss.access-key-id}")
     private String accessKeyId;
 
-    @Value("${aliyun.oss.access-key-secret:}")
+    @Value("${aliyun.oss.access-key-secret}")
     private String accessKeySecret;
 
-    @Value("${aliyun.oss.bucket-name:}")
+    @Value("${aliyun.oss.bucket-name}")
     private String bucketName;
 
-    @Value("${aliyun.oss.dir-prefix:corpus/raw/}")
+    @Value("${aliyun.oss.dir-prefix}")
     private String dirPrefix;
 
     private OSS createClient() {
