@@ -258,7 +258,8 @@ mysql -u root -p < sql/init.sql
 
 # 2. 确保 Redis 和 Qdrant 已启动
 #    Redis:    localhost:6379
-#    Qdrant:   localhost:6334
+#    Qdrant:   localhost:6333(HTTP) / localhost:6334(gRPC)
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/storage qdrant/qdrant:latest
 
 # 3. 编译 Proto 模块（其他模块依赖其编译产物）
 mvn clean install -pl proto-api -DskipTests

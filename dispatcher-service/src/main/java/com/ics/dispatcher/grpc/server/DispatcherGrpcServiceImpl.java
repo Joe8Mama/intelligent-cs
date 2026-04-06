@@ -1,6 +1,7 @@
 package com.ics.dispatcher.grpc.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ics.dispatcher.grpc.client.LlmGrpcClient;
 import com.ics.dispatcher.grpc.proto.*;
 import com.ics.dispatcher.model.entity.DispatchTask;
 import com.ics.dispatcher.service.DispatchTaskService;
@@ -11,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.time.ZoneOffset;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 /**
@@ -33,13 +36,17 @@ import java.util.stream.Collectors;
 public class DispatcherGrpcServiceImpl extends DispatcherServiceGrpc.DispatcherServiceImplBase {
 
     private final DispatchTaskService dispatchTaskService;
+    private final LlmGrpcClient llmGrpcClient;
     private final ObjectMapper objectMapper;
+    private final Executor dispatchExecutor;
 
     /**
      * ① 接收「意图识别失败」事件
      *
      * 由小模型服务层在识别失败时调用
-     * 触发: 异步语料生成 + 大模型直接回答
+     * 并行启动两个线程:
+     * - 线程1: 调用大模型获取兜底回答（等待结果，随响应返回给小模型）
+     * - 线程2: 创建调度任务并触发语料生成编排（异步，不阻塞响应）
      */
     @Override
     public void onIntentFailed(IntentFailedEvent request,
@@ -56,36 +63,53 @@ public class DispatcherGrpcServiceImpl extends DispatcherServiceGrpc.DispatcherS
                 return;
             }
 
-            // 将对话历史序列化为 JSON
-            String dialogContext;
-            try {
-                dialogContext = request.getDialogHistoryList().stream()
-                        .map(msg -> msg.getRole() + ": " + msg.getContent())
-                        .collect(Collectors.joining("\n"));
-            } catch (Exception e) {
-                dialogContext = "user: " + request.getUserInput();
-            }
+            // 将对话历史序列化为文本
+            final String dialogContext = buildDialogContext(request);
 
-            // 委托给业务服务处理
-            String taskId = dispatchTaskService.handleIntentFailedEvent(
-                    eventId,
-                    request.getSessionId(),
-                    request.getUserId(),
-                    dialogContext
-            );
+            // 线程1: 调用大模型获取兜底回答（需要等待结果）
+            CompletableFuture<String> answerFuture = CompletableFuture.supplyAsync(() ->
+                    llmGrpcClient.callDirectAnswer(
+                            request.getSessionId(),
+                            request.getUserId(),
+                            request.getUserInput()
+                    ), dispatchExecutor);
 
-            // 构建响应
+            // 线程2: 创建调度任务并触发语料生成编排（异步，不阻塞响应）
+            CompletableFuture<String> taskFuture = CompletableFuture.supplyAsync(() ->
+                    dispatchTaskService.handleIntentFailedEvent(
+                            eventId,
+                            request.getSessionId(),
+                            request.getUserId(),
+                            dialogContext
+                    ), dispatchExecutor);
+
+            // 语料编排失败不影响兜底回答返回，由 RetryScheduler 兜底
+            taskFuture.exceptionally(ex -> {
+                log.error("[gRPC:OnIntentFailed] 语料编排异步执行异常, eventId={}, error={}",
+                        eventId, ex.getMessage(), ex);
+                return null;
+            });
+
+            // 只等待兜底回答（语料编排异步进行，不阻塞响应）
+            String answer = answerFuture.join();
+
+            // taskId 可能尚未生成（语料编排线程还在跑），使用 eventId 占位
+            String taskId = taskFuture.getNow("");
+
+            // 构建响应（包含大模型兜底回答，小模型可直接透传给前端）
             EventResponse response = EventResponse.newBuilder()
                     .setEventId(eventId)
                     .setCode(0)
-                    .setMessage("事件已接收，调度任务已创建")
+                    .setMessage("事件已接收，大模型兜底回答已返回")
                     .setTaskId(taskId)
+                    .setAnswer(answer != null ? answer : "")
                     .build();
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
 
-            log.info("[gRPC:OnIntentFailed] 事件处理完成, eventId={}, taskId={}", eventId, taskId);
+            log.info("[gRPC:OnIntentFailed] 兜底回答已返回, eventId={}, taskId={}, answerLength={}",
+                    eventId, taskId.isEmpty() ? "(异步生成中)" : taskId, answer != null ? answer.length() : 0);
 
         } catch (Exception e) {
             log.error("[gRPC:OnIntentFailed] 处理异常, eventId={}, error={}", eventId, e.getMessage(), e);
@@ -283,5 +307,18 @@ public class DispatcherGrpcServiceImpl extends DispatcherServiceGrpc.DispatcherS
                 .setMessage(message)
                 .build());
         observer.onCompleted();
+    }
+
+    /**
+     * 将对话历史序列化为文本，解析失败时降级为用户原始输入
+     */
+    private String buildDialogContext(IntentFailedEvent request) {
+        try {
+            return request.getDialogHistoryList().stream()
+                    .map(msg -> msg.getRole() + ": " + msg.getContent())
+                    .collect(Collectors.joining("\n"));
+        } catch (Exception e) {
+            return "user: " + request.getUserInput();
+        }
     }
 }

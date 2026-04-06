@@ -87,6 +87,7 @@ message EventResponse {
     int32 code = 2;          // 状态码: 0=已接收, 1=重复事件(幂等), 2=参数错误, 99=系统异常
     string message = 3;      // 描述
     string task_id = 4;      // 分配的任务ID（用于后续追踪）
+    string answer = 5;       // 大模型兜底回答（仅 OnIntentFailed 时返回）
 }
 
 // ============================================================================
