@@ -28,6 +28,9 @@ public class CorpusItem {
     /** 分类 */
     private String category;
 
+    /** 意图 */
+    private String intent;
+
     /** 生成置信度 */
     private BigDecimal confidence;
 }

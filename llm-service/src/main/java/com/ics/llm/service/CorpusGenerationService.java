@@ -161,12 +161,14 @@ public class CorpusGenerationService {
 
     /**
      * 将语料列表转为 JSONL 字节流
-     * 每行一条对话记录，格式: {"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+     * 每行一条对话记录，格式: {"intent": "...", "messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
      */
     private byte[] buildJsonlBytes(List<CorpusItem> corpusList) throws Exception {
         StringBuilder sb = new StringBuilder();
         for (CorpusItem item : corpusList) {
-            Map<String, Object> record = Map.of("messages", List.of(
+            Map<String, Object> record = new java.util.HashMap<>();
+            record.put("intent", item.getIntent() != null ? item.getIntent() : "");
+            record.put("messages", List.of(
                     Map.of("role", "user", "content", item.getQuestion()),
                     Map.of("role", "assistant", "content", item.getAnswer())
             ));
@@ -295,6 +297,7 @@ public class CorpusGenerationService {
                 String question = (String) item.get("question");
                 String answer = (String) item.get("answer");
                 String category = (String) item.getOrDefault("category", "通用");
+                String intent = (String) item.getOrDefault("intent", "");
                 double confidence = item.containsKey("confidence")
                         ? ((Number) item.get("confidence")).doubleValue() : 0.8;
 
@@ -312,6 +315,7 @@ public class CorpusGenerationService {
                         .question(question)
                         .answer(answer)
                         .category(category)
+                        .intent(intent)
                         .confidence(BigDecimal.valueOf(confidence))
                         .build());
             }
